@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+venv/
+.env
+
+# Data — never commit raw data to git
+data/raw/
+data/processed/
+data/external/
+
+# Model artifacts — store in S3 instead
+artifacts/models/
+artifacts/metrics/
+
+# Logs
+logs/
+
+# MLflow
+mlflow_tracking/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Terraform state (sensitive)
+infrastructure/terraform/.terraform/
+infrastructure/terraform/*.tfstate
+infrastructure/terraform/*.tfstate.backup
+infrastructure/terraform/*.tfvars
+
+# Docker
+*.dockerignore

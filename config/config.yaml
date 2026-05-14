@@ -1,0 +1,114 @@
+# ============================================================
+# Loan Payment Propensity — Central Project Configuration
+# ============================================================
+
+project:
+  name: "loan-propensity-mlops"
+  version: "1.0.0"
+  description: "End-to-end MLOps pipeline for predicting loan payment propensity"
+  author: "Data Science Team"
+
+# ── Data paths ──────────────────────────────────────────────
+data:
+  raw_data_path: "data/raw/Loan_Data_Clean_cld.xlsx"
+  processed_data_path: "data/processed/loan_processed.csv"
+  feature_store_path: "data/processed/feature_store.csv"
+  sql_db_path: "data/external/loan_database.db"   # SQLite for local dev; replace with RDS in prod
+
+# ── Feature groups ──────────────────────────────────────────
+features:
+  target_column: "Payment_Next30Days"
+  drop_columns: ["Loan Id", "clnt_no"]
+  date_columns: ["birthday", "chargeoff_date", "lastNoticeSent", "last_pmt_date"]
+  reference_date: "2026-04-30"
+
+  one_hot_columns: ["state"]
+  ordinal_columns: ["Creditor name", "status"]
+  power_transform_columns:
+    - original_balance
+    - current_balance
+    - times_dials
+    - times_connect
+    - times_contact
+    - times_rpc
+    - times_ptp
+    - times_drop
+    - times_lm
+    - days_since_last_payment
+    - balance_ratio
+  standard_scale_columns:
+    - age
+    - days_since_chargeoff
+    - days_since_last_notice
+    - last_pmt_amt
+    - times_up
+    - times_lm
+    - total_portal_visit
+    - contact_rate
+    - rpc_rate
+    - ptp_rate
+
+# ── Resampling ───────────────────────────────────────────────
+resampling:
+  strategy: "oversample_minority"
+  minority_target_size: 15000
+  majority_target_size: 15000
+  random_state: 42
+
+# ── Model training ───────────────────────────────────────────
+model:
+  random_state: 42
+  test_size: 0.2
+  cv_folds: 3
+  scoring_metric: "roc_auc"
+  n_iter_random_search: 30
+
+  # Hyperparameter search spaces
+  rf_params:
+    n_estimators: [100, 200, 300]
+    max_depth: [10, 15, 20, null]
+    max_features: ["sqrt", "log2"]
+    min_samples_split: [2, 5, 10]
+    class_weight: ["balanced"]
+
+  gb_params:
+    n_estimators: [100, 200]
+    max_depth: [3, 5, 7]
+    learning_rate: [0.05, 0.1, 0.2]
+    subsample: [0.8, 1.0]
+
+  knn_params:
+    n_neighbors: [3, 5, 7, 9, 11]
+    weights: ["uniform", "distance"]
+    metric: ["euclidean", "manhattan"]
+
+# ── Artifacts ────────────────────────────────────────────────
+artifacts:
+  model_path: "artifacts/models/final_model.pkl"
+  preprocessor_path: "artifacts/models/preprocessor.pkl"
+  metrics_path: "artifacts/metrics/model_metrics.json"
+  report_path: "artifacts/reports/model_report.html"
+
+# ── MLflow tracking ──────────────────────────────────────────
+mlflow:
+  tracking_uri: "mlflow_tracking"
+  experiment_name: "loan-propensity-experiment"
+
+# ── AWS ──────────────────────────────────────────────────────
+aws:
+  region: "ap-south-1"                   # Mumbai — closest to India
+  s3_bucket: "loan-propensity-mlops"
+  ecr_repository: "loan-propensity-api"
+  ec2_instance_type: "t3.medium"
+
+# ── API ──────────────────────────────────────────────────────
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 2
+
+# ── Monitoring ───────────────────────────────────────────────
+monitoring:
+  drift_threshold: 0.1          # PSI > 0.1 triggers alert
+  accuracy_drop_threshold: 0.05 # >5% accuracy drop triggers retrain
+  prediction_log_path: "logs/predictions.jsonl"

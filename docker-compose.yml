@@ -1,0 +1,70 @@
+# docker-compose.yml
+# ─────────────────────────────────────────────────────────────
+# Runs the full stack locally:
+#   - FastAPI  → http://localhost:8000
+#   - Streamlit → http://localhost:8501
+#   - MLflow    → http://localhost:5000
+# ─────────────────────────────────────────────────────────────
+
+version: "3.9"
+
+services:
+
+  # ── Flask prediction service ────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: loan-propensity-flask-api
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./artifacts:/app/artifacts
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config:/app/config
+    environment:
+      - PYTHONUNBUFFERED=1
+      - FLASK_ENV=production
+      - AWS_REGION=ap-south-1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # ── Streamlit dashboard ─────────────────────────────────────
+  streamlit:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.streamlit
+    container_name: loan-propensity-dashboard
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./artifacts:/app/artifacts
+      - ./data:/app/data
+      - ./config:/app/config
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # ── MLflow tracking server ──────────────────────────────────
+  mlflow:
+    image: python:3.11-slim
+    container_name: loan-mlflow
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlflow_tracking:/mlflow
+    command: >
+      sh -c "pip install mlflow -q &&
+             mlflow server --host 0.0.0.0 --port 5000
+             --backend-store-uri /mlflow
+             --default-artifact-root /mlflow/artifacts"
+    restart: unless-stopped
+
+volumes:
+  artifacts:
+  logs:
