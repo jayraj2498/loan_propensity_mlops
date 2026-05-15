@@ -5,10 +5,25 @@ Every module imports this instead of setting up its own logger.
 
 import logging
 import os
+import sys
 from datetime import datetime
 
 LOG_DIR = "logs"
 os.makedirs(LOG_DIR, exist_ok=True)
+
+
+def _get_console_stream():
+    """
+    Configure the console stream to tolerate Unicode log messages on Windows.
+    If the terminal cannot render a character, replace it instead of crashing.
+    """
+    stream = sys.stderr
+    if hasattr(stream, "reconfigure"):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):
+            stream.reconfigure(errors="replace")
+    return stream
 
 def get_logger(name: str) -> logging.Logger:
     """
@@ -28,13 +43,13 @@ def get_logger(name: str) -> logging.Logger:
     )
 
     # Console handler
-    ch = logging.StreamHandler()
+    ch = logging.StreamHandler(_get_console_stream())
     ch.setLevel(logging.INFO)
     ch.setFormatter(formatter)
 
     # File handler — one file per day
     log_file = os.path.join(LOG_DIR, f"{datetime.now().strftime('%Y-%m-%d')}.log")
-    fh = logging.FileHandler(log_file)
+    fh = logging.FileHandler(log_file, encoding="utf-8")
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(formatter)
 

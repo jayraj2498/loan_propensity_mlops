@@ -63,6 +63,159 @@ def error_response(message, status=400):
 # ══════════════════════════════════════════════════════════════
 
 # ── GET /health ───────────────────────────────────────────────
+@app.route("/", methods=["GET", "POST"])
+def home():
+    """Simple browser UI for single-record loan propensity scoring."""
+    result = None
+    error = None
+    form_values = {
+        "loan_id": "L001",
+        "original_balance": "5000",
+        "current_balance": "4800",
+        "last_pmt_amt": "0",
+        "birthday": "1985-06-15",
+        "status": "1",
+        "lastNoticeSent": "2026-01-15",
+        "state": "TX",
+        "creditor_name": "CAPITAL ONE",
+        "chargeoff_date": "2022-01-01",
+        "total_portal_visit": "0",
+        "times_dials": "10",
+        "times_connect": "3",
+        "times_contact": "2",
+        "times_rpc": "1",
+        "times_ptp": "1",
+        "times_up": "0",
+        "times_drop": "2",
+        "times_lm": "3",
+    }
+
+    if request.method == "POST":
+        form_values.update({k: request.form.get(k, "").strip() for k in form_values})
+        if predictor is None:
+            error = "Model is not loaded, so predictions are currently unavailable."
+        else:
+            try:
+                import pandas as pd
+
+                record = {
+                    "Loan Id": form_values["loan_id"] or "WEB001",
+                    "original_balance": float(form_values["original_balance"] or 0),
+                    "current_balance": float(form_values["current_balance"] or 0),
+                    "last_pmt_amt": float(form_values["last_pmt_amt"] or 0),
+                    "last_pmt_date": None,
+                    "birthday": pd.to_datetime(form_values["birthday"]),
+                    "status": int(form_values["status"] or 0),
+                    "lastNoticeSent": pd.to_datetime(form_values["lastNoticeSent"]),
+                    "state": form_values["state"] or "Unknown",
+                    "Creditor name": form_values["creditor_name"] or "Unknown",
+                    "chargeoff_date": pd.to_datetime(form_values["chargeoff_date"]),
+                    "total_portal_visit": int(form_values["total_portal_visit"] or 0),
+                    "times_dials": int(form_values["times_dials"] or 0),
+                    "times_connect": int(form_values["times_connect"] or 0),
+                    "times_contact": int(form_values["times_contact"] or 0),
+                    "times_rpc": int(form_values["times_rpc"] or 0),
+                    "times_ptp": int(form_values["times_ptp"] or 0),
+                    "times_up": int(form_values["times_up"] or 0),
+                    "times_drop": int(form_values["times_drop"] or 0),
+                    "times_lm": int(form_values["times_lm"] or 0),
+                }
+                result = predictor.predict_single(record)
+                result["loan_id"] = record["Loan Id"]
+            except Exception as e:
+                error = f"Could not score this record: {e}"
+
+    html = f"""
+    <!DOCTYPE html><html><head><meta charset='utf-8'>
+    <title>Loan Propensity Flask App</title>
+    <style>
+      body{{font-family:Arial,sans-serif;max-width:1100px;margin:auto;padding:32px;background:#f8f9fa;color:#2c3e50}}
+      h1{{border-bottom:3px solid #3498db;padding-bottom:10px}}
+      h2{{margin:0 0 14px 0;color:#1f5f8b}}
+      .card{{background:white;border-radius:10px;padding:20px 24px;box-shadow:0 2px 8px rgba(0,0,0,0.08);margin-top:20px}}
+      .status{{display:inline-block;padding:6px 12px;border-radius:999px;background:{'#27ae60' if predictor else '#e67e22'};color:white;font-weight:bold}}
+      a{{color:#2980b9;text-decoration:none;font-weight:bold}}
+      ul{{line-height:1.9}}
+      code{{background:#ecf0f1;padding:2px 6px;border-radius:4px}}
+      .grid{{display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:14px}}
+      label{{display:block;font-weight:bold;margin-bottom:6px}}
+      input{{width:100%;padding:10px 12px;border:1px solid #cfd8dc;border-radius:8px;box-sizing:border-box}}
+      .submit{{margin-top:18px;background:#2980b9;color:white;border:none;padding:12px 18px;border-radius:8px;font-size:16px;cursor:pointer}}
+      .submit:hover{{background:#21658f}}
+      .result{{background:#eef8f0;border-left:5px solid #27ae60}}
+      .error{{background:#fff3f3;border-left:5px solid #c0392b}}
+      .metric{{display:inline-block;min-width:180px;margin:10px 16px 0 0;padding:14px 16px;background:#f4f8fb;border-radius:8px}}
+      .metric strong{{display:block;font-size:13px;color:#5b6b76;margin-bottom:6px}}
+      .metric span{{font-size:24px;font-weight:bold;color:#1f5f8b}}
+      @media (max-width: 900px) {{ .grid{{grid-template-columns:1fr;}} }}
+    </style></head><body>
+    <h1>Loan Propensity Prediction Flask App</h1>
+    <div class="card">
+      <p><span class="status">{'RUNNING' if predictor else 'DEGRADED'}</span></p>
+      <p>This Flask service is up and listening on port <code>5000</code>. You can enter one loan record below and get the predicted value directly in the browser.</p>
+      <p><b>Model loaded:</b> {'Yes' if predictor else 'No'} </p>
+      <p><b>Current time:</b> {datetime.utcnow().isoformat()}</p>
+    </div>
+
+    <div class="card">
+      <h2>Prediction Form</h2>
+      <form method="post">
+        <div class="grid">
+          <div><label>Loan ID</label><input name="loan_id" value="{form_values['loan_id']}"></div>
+          <div><label>Original Balance</label><input name="original_balance" type="number" step="0.01" value="{form_values['original_balance']}"></div>
+          <div><label>Current Balance</label><input name="current_balance" type="number" step="0.01" value="{form_values['current_balance']}"></div>
+          <div><label>Last Payment Amount</label><input name="last_pmt_amt" type="number" step="0.01" value="{form_values['last_pmt_amt']}"></div>
+          <div><label>Birthday</label><input name="birthday" type="date" value="{form_values['birthday']}"></div>
+          <div><label>Status Code</label><input name="status" type="number" value="{form_values['status']}"></div>
+          <div><label>Last Notice Sent</label><input name="lastNoticeSent" type="date" value="{form_values['lastNoticeSent']}"></div>
+          <div><label>State</label><input name="state" value="{form_values['state']}"></div>
+          <div><label>Creditor Name</label><input name="creditor_name" value="{form_values['creditor_name']}"></div>
+          <div><label>Chargeoff Date</label><input name="chargeoff_date" type="date" value="{form_values['chargeoff_date']}"></div>
+          <div><label>Portal Visits</label><input name="total_portal_visit" type="number" value="{form_values['total_portal_visit']}"></div>
+          <div><label>Times Dials</label><input name="times_dials" type="number" value="{form_values['times_dials']}"></div>
+          <div><label>Times Connect</label><input name="times_connect" type="number" value="{form_values['times_connect']}"></div>
+          <div><label>Times Contact</label><input name="times_contact" type="number" value="{form_values['times_contact']}"></div>
+          <div><label>Times RPC</label><input name="times_rpc" type="number" value="{form_values['times_rpc']}"></div>
+          <div><label>Times PTP</label><input name="times_ptp" type="number" value="{form_values['times_ptp']}"></div>
+          <div><label>Times Urgent Pay</label><input name="times_up" type="number" value="{form_values['times_up']}"></div>
+          <div><label>Times Drop</label><input name="times_drop" type="number" value="{form_values['times_drop']}"></div>
+          <div><label>Times Left Message</label><input name="times_lm" type="number" value="{form_values['times_lm']}"></div>
+        </div>
+        <button class="submit" type="submit">Predict Value</button>
+      </form>
+    </div>
+
+    {f'''
+    <div class="card result">
+      <h2>Prediction Result</h2>
+      <div class="metric"><strong>Loan ID</strong><span>{result["loan_id"]}</span></div>
+      <div class="metric"><strong>Propensity Score</strong><span>{result["propensity_score_pct"]:.2f}%</span></div>
+      <div class="metric"><strong>Predicted Label</strong><span>{result["predicted_label"]}</span></div>
+      <div class="metric"><strong>Risk Band</strong><span>{result["risk_band"]}</span></div>
+    </div>
+    ''' if result else ''}
+
+    {f'''
+    <div class="card error">
+      <h2>Problem</h2>
+      <p>{error}</p>
+    </div>
+    ''' if error else ''}
+
+    <div class="card">
+      <h2>API Endpoints</h2>
+      <ul>
+        <li><a href="/health">/health</a> - service and model status</li>
+        <li><a href="/docs">/docs</a> - API usage documentation</li>
+        <li><a href="/model/info">/model/info</a> - trained model metrics</li>
+      </ul>
+      <p><code>/predict</code> and <code>/predict/batch</code> still work as JSON API endpoints if you want programmatic access later.</p>
+    </div>
+    </body></html>
+    """
+    return render_template_string(html)
+
+
 @app.route("/health", methods=["GET"])
 def health():
     """
